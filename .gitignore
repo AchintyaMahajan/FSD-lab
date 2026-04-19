@@ -1,0 +1,8 @@
+# Root-level gitignore — covers both backend and frontend
+**/.env
+**/node_modules/
+**/build/
+**/dist/
+**/*.log
+.DS_Store
+Thumbs.db
