@@ -1,0 +1,16 @@
+# ── Environment Variables ─────────────────────────────────────
+# NEVER commit .env — it contains secrets
+.env
+
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+
+# ── Logs ─────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+
+# ── OS / Editor ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
