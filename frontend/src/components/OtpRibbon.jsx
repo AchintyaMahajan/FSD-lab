@@ -60,12 +60,13 @@ const OtpRibbon = () => {
   if (otps.length === 0) return null;
 
   return (
-    <div className="otp-ribbon px-4 py-2">
-      <div className="max-w-7xl mx-auto flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-1.5 text-amber-400 font-semibold text-sm">
+    <div className="otp-ribbon px-3 sm:px-4 py-2">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 items-start sm:items-center">
+        <div className="flex items-center gap-1.5 text-amber-400 font-semibold text-sm shrink-0">
           <KeyRound size={15} />
           OTP Alert
         </div>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
         {otps.map(otp => (
           <div
             key={otp.emailId}
@@ -94,6 +95,7 @@ const OtpRibbon = () => {
             </button>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

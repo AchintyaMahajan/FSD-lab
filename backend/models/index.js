@@ -17,4 +17,6 @@ module.exports = {
   PendingAutoResponse: require('./PendingAutoResponse'),
   SafeDelete:          require('./SafeDelete'),
   IgnoredSender:       require('./IgnoredSender'),
+  ScheduledEmail:      require('./ScheduledEmail'),
+  OTP:                 require('./OTP'),
 };

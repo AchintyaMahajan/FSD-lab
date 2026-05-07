@@ -24,6 +24,10 @@ const userSchema = new mongoose.Schema({
     type: String,   // Google profile picture URL
     default: null,
   },
+  password: {
+    type: String,   // Hashed password for email auth (null for Google users)
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -31,6 +35,19 @@ const userSchema = new mongoose.Schema({
   lastLogin: {
     type: Date,
     default: Date.now,
+  },
+  plan: {
+    type: String,
+    enum: ['free', 'pro'],
+    default: 'free',
+  },
+  planActivatedAt: {
+    type: Date,
+    default: null,
+  },
+  razorpayPaymentId: {
+    type: String,
+    default: null,
   },
 });
 

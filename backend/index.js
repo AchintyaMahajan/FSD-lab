@@ -16,8 +16,9 @@ const express      = require('express');
 const cors         = require('cors');
 const cookieParser = require('cookie-parser');
 
-const connectDB           = require('./config/db');
-const { startCleanupJobs } = require('./jobs/cleanup');
+const connectDB            = require('./config/db');
+const { startCleanupJobs }  = require('./jobs/cleanup');
+const { startSchedulerJob } = require('./jobs/scheduler');
 
 // ── App ────────────────────────────────────────────────────────────────────
 const app  = express();
@@ -46,6 +47,8 @@ app.use('/api/auto-response',     require('./routes/autoResponse'));
 app.use('/api/pending-responses', require('./routes/pendingResponses'));
 app.use('/api/senders',           require('./routes/senders'));
 app.use('/api/summary',           require('./routes/summary'));
+app.use('/api/payment',           require('./routes/payment'));
+app.use('/api/compose',           require('./routes/compose'));
 
 // ── 404 handler ───────────────────────────────────────────────────────────
 app.use((_req, res) => {
@@ -63,6 +66,7 @@ app.use((err, _req, res, _next) => {
 const start = async () => {
   await connectDB();           // 1. Establish MongoDB connection
   startCleanupJobs();          // 2. Start cron jobs
+  startSchedulerJob();         // 3. Start email scheduler job
 
   app.listen(PORT, () => {
     console.log(`🚀  MasterMail backend running on http://localhost:${PORT}`);

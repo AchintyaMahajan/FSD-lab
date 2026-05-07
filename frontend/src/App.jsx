@@ -11,11 +11,16 @@ import Dashboard          from './pages/Dashboard';
 import CustomBuckets      from './pages/CustomBuckets';
 import AutoResponseRules  from './pages/AutoResponseRules';
 import PendingResponses   from './pages/PendingResponses';
+import LandingPage        from './pages/LandingPage';
+import Compose            from './pages/Compose';
+import PrivacyPolicy      from './pages/PrivacyPolicy';
+import TermsOfService     from './pages/TermsOfService';
 
 const App = () => (
   <AuthProvider>
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login"    element={<Login />} />
 
         <Route path="/dashboard" element={
@@ -30,9 +35,16 @@ const App = () => (
         <Route path="/pending-responses" element={
           <ProtectedRoute><PendingResponses /></ProtectedRoute>
         }/>
+        <Route path="/compose" element={
+          <ProtectedRoute><Compose /></ProtectedRoute>
+        }/>
 
-        {/* Default → login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Public pages (required for Google OAuth verification) */}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms"   element={<TermsOfService />} />
+
+        {/* Default → Landing Page */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
 
