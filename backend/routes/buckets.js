@@ -12,6 +12,7 @@
 
 const express = require('express');
 const authMiddleware  = require('../middleware/auth');
+const { requirePro } = require('../middleware/planCheck');
 const { CustomBucket, BucketRule, Email } = require('../models');
 
 const router = express.Router();
@@ -51,7 +52,7 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // ── POST /api/buckets ─────────────────────────────────────────────────────
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, requirePro, async (req, res) => {
   const { bucketName, description, isPinned = false } = req.body;
   const { userId } = req.user;
 
@@ -99,7 +100,7 @@ router.delete('/:bucketId', authMiddleware, async (req, res) => {
 });
 
 // ── POST /api/buckets/rules ───────────────────────────────────────────────
-router.post('/rules', authMiddleware, async (req, res) => {
+router.post('/rules', authMiddleware, requirePro, async (req, res) => {
   const { bucketId, ruleType, ruleValue } = req.body;
   const { userId } = req.user;
 

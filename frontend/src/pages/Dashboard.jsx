@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   RefreshCw, LogOut, FolderOpen, Settings2, Inbox,
   CheckCircle, EyeOff, Trash2, ChevronLeft, Send,
-  Wand2, Mail, AlertCircle, Clock, ChevronDown,
+  Wand2, Mail, AlertCircle, Clock, ChevronDown, PenSquare, Menu, X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -17,6 +17,7 @@ import { useAuth }          from '../context/AuthContext';
 import api                  from '../lib/axios';
 import OtpRibbon            from '../components/OtpRibbon';
 import DailySummaryPanel    from '../components/DailySummaryPanel';
+import PlanBadge            from '../components/PlanBadge';
 
 /* ── Small sub-components ──────────────────────────────────────────────── */
 const CategoryCard = ({ id, title, count, subtitle, color, onClick, isActive }) => (
@@ -61,6 +62,7 @@ const Dashboard = () => {
   const [emailLimit, setEmailLimit]         = useState(10);
   const [showLimitMenu, setShowLimitMenu]   = useState(false);
   const [pendingCount, setPendingCount]     = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   /* ── Data fetchers ──────────────────────────────────────────────────── */
   const fetchSummary = useCallback(async () => {
@@ -232,6 +234,74 @@ const Dashboard = () => {
   const toggleSelect = (id) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
+  // --- Gmail Connection for Email/Password Users ---
+  const handleConnectGmail = () => {
+    const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!GOOGLE_CLIENT_ID) return toast.error('Google Client ID missing');
+    const redirectUri = `${window.location.origin}/dashboard`;
+    const SCOPES = [
+      'email', 'profile',
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.modify',
+    ].join(' ');
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
+    window.location.href = url;
+  };
+
+  // Handle returning from Connect Gmail OAuth
+  useEffect(() => {
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const token = params.get('access_token');
+    if (token && !gmailToken) {
+      window.history.replaceState(null, '', window.location.pathname);
+      saveGmailToken(token);
+      toast.success('Gmail connected successfully!');
+    }
+  }, [gmailToken, saveGmailToken]);
+
+  // If user has no gmailToken, they can't see emails. Show a big prompt.
+  if (!gmailToken) {
+    return (
+      <div className="min-h-screen p-4 sm:p-6 flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+        {/* Header */}
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-8 pb-4 border-b border-white/5 relative z-10 slide-up">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-brand-600 shadow-lg shadow-brand-900/50">
+              <Mail size={18} className="text-white" />
+            </div>
+            <h1 className="text-xl font-bold gradient-text">MasterMail</h1>
+          </div>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <span className="text-xs sm:text-sm font-medium text-slate-300 truncate max-w-[200px]">{user?.email}</span>
+            <button onClick={() => { logout(); navigate('/login'); }} className="btn-ghost py-1.5 text-xs text-red-400 hover:text-red-300">
+              <LogOut size={14} /> Logout
+            </button>
+          </div>
+        </header>
+
+        <div className="flex-1 flex items-center justify-center fade-in">
+          <div className="glass-card max-w-md w-full p-8 text-center space-y-6">
+            <div className="w-16 h-16 bg-brand-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
+              <Mail size={28} className="text-brand-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-100">Connect Gmail</h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              MasterMail requires read, send, and modify access to your Gmail to triage your inbox and extract OTPs. 
+            </p>
+            <button 
+              onClick={handleConnectGmail}
+              className="btn-primary w-full justify-center py-3 text-sm shadow-lg shadow-brand-500/20"
+            >
+              Authorize with Google
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   /* ── Render ─────────────────────────────────────────────────────────── */
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
@@ -240,11 +310,13 @@ const Dashboard = () => {
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Mail size={20} className="text-brand-400" />
-            <span className="font-bold gradient-text text-lg">MasterMail</span>
+            <span className="font-bold gradient-text text-lg mr-2">MasterMail</span>
+            <PlanBadge />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            {/* Custom dark dropdown — replaces native select */}
+          {/* Desktop toolbar */}
+          <div className="hidden md:flex items-center gap-2 flex-wrap justify-end">
+            {/* Custom dark dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowLimitMenu(p => !p)}
@@ -255,7 +327,6 @@ const Dashboard = () => {
               </button>
               {showLimitMenu && (
                 <>
-                  {/* Backdrop to close on outside click */}
                   <div className="fixed inset-0 z-40" onClick={() => setShowLimitMenu(false)} />
                   <div className="absolute right-0 top-full mt-1 z-50 min-w-[7rem] rounded-xl overflow-hidden"
                     style={{ background: 'rgba(22,33,62,0.98)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
@@ -278,19 +349,19 @@ const Dashboard = () => {
               )}
             </div>
 
+            <button onClick={() => navigate('/compose')} className="btn-ghost py-1.5 text-xs">
+              <PenSquare size={13} /> Compose
+            </button>
             <button id="sync-btn" onClick={syncEmails} disabled={isSyncing} className="btn-primary py-1.5 text-xs">
               <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
               {isSyncing ? 'Syncing…' : 'Sync'}
             </button>
-
             <button onClick={() => navigate('/custom-buckets')} className="btn-ghost py-1.5 text-xs">
               <FolderOpen size={13} /> Buckets
             </button>
-
             <button onClick={() => navigate('/auto-response-rules')} className="btn-ghost py-1.5 text-xs relative">
               <Settings2 size={13} /> Auto-Reply
             </button>
-
             <button onClick={() => navigate('/pending-responses')} className="btn-ghost py-1.5 text-xs relative">
               <Clock size={13} /> Pending
               {pendingCount > 0 && (
@@ -299,20 +370,82 @@ const Dashboard = () => {
                 </span>
               )}
             </button>
-
             <button onClick={() => { setShowTrash(true); fetchSafeDeleted(); }} className="btn-ghost py-1.5 text-xs">
               <Trash2 size={13} /> Trash
             </button>
-
             <button onClick={handleLogout} className="btn-ghost py-1.5 text-xs">
               <LogOut size={13} />
             </button>
-
             {user?.picture && (
               <img src={user.picture} alt={user.name} className="w-7 h-7 rounded-full ring-2 ring-brand-500/40" />
             )}
           </div>
+
+          {/* Mobile: Sync + Hamburger */}
+          <div className="flex md:hidden items-center gap-2">
+            <button id="sync-btn-mobile" onClick={syncEmails} disabled={isSyncing} className="btn-primary py-1.5 text-xs">
+              <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+              {isSyncing ? 'Syncing…' : 'Sync'}
+            </button>
+            <button onClick={() => setMobileMenuOpen(p => !p)} className="btn-ghost p-2">
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile slide-down menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-white/5 px-4 py-3 space-y-2" style={{ background: 'rgba(15,15,26,0.98)' }}>
+            {/* Limit selector */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-slate-400">Sync limit:</span>
+              {[5, 10, 15, 20].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setEmailLimit(n)}
+                  className={`px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                    n === emailLimit
+                      ? 'bg-brand-500/20 text-brand-400 font-semibold'
+                      : 'bg-white/5 text-slate-400'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => { navigate('/compose'); setMobileMenuOpen(false); }} className="btn-ghost py-2 text-xs justify-center">
+                <PenSquare size={13} /> Compose
+              </button>
+              <button onClick={() => { navigate('/custom-buckets'); setMobileMenuOpen(false); }} className="btn-ghost py-2 text-xs justify-center">
+                <FolderOpen size={13} /> Buckets
+              </button>
+              <button onClick={() => { navigate('/auto-response-rules'); setMobileMenuOpen(false); }} className="btn-ghost py-2 text-xs justify-center">
+                <Settings2 size={13} /> Auto-Reply
+              </button>
+              <button onClick={() => { navigate('/pending-responses'); setMobileMenuOpen(false); }} className="btn-ghost py-2 text-xs justify-center relative">
+                <Clock size={13} /> Pending
+                {pendingCount > 0 && (
+                  <span className="absolute top-0.5 right-1 bg-amber-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+              <button onClick={() => { setShowTrash(true); fetchSafeDeleted(); setMobileMenuOpen(false); }} className="btn-ghost py-2 text-xs justify-center">
+                <Trash2 size={13} /> Trash
+              </button>
+              <button onClick={handleLogout} className="btn-ghost py-2 text-xs justify-center text-red-400">
+                <LogOut size={13} /> Logout
+              </button>
+            </div>
+            {user?.picture && (
+              <div className="flex items-center gap-2 pt-1 border-t border-white/5">
+                <img src={user.picture} alt={user.name} className="w-6 h-6 rounded-full ring-2 ring-brand-500/40" />
+                <span className="text-xs text-slate-400 truncate">{user.email}</span>
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       {/* OTP Ribbon */}
@@ -348,26 +481,31 @@ const Dashboard = () => {
                 {emails.map(email => (
                   <div
                     key={email.emailId}
-                    className={`glass-card p-4 cursor-pointer transition-all ${selectedEmail?.emailId === email.emailId ? 'ring-2 ring-brand-500/50' : ''}`}
+                    className={`glass-card p-3 sm:p-4 cursor-pointer transition-all overflow-hidden ${selectedEmail?.emailId === email.emailId ? 'ring-2 ring-brand-500/50' : ''}`}
                     onClick={() => { setSelectedEmail(email); setReplyText(email.draftReply || ''); }}
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-2 sm:gap-3">
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(email.emailId)}
                         onChange={() => toggleSelect(email.emailId)}
                         onClick={e => e.stopPropagation()}
-                        className="mt-1 accent-brand-500"
+                        className="mt-1 accent-brand-500 shrink-0"
                       />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        {/* Row 1: sender + time */}
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
                           <p className="font-medium text-sm text-slate-200 truncate">{email.senderName}</p>
-                          <ActionBadge state={email.actionState} />
-                          {email.hasOtp && <span className="badge badge-success">OTP</span>}
-                          <p className="ml-auto text-xs text-slate-500 shrink-0">
+                          <p className="text-xs text-slate-500 shrink-0 tabular-nums">
                             {new Date(email.date).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
                           </p>
                         </div>
+                        {/* Row 2: badges */}
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <ActionBadge state={email.actionState} />
+                          {email.hasOtp && <span className="badge badge-success">OTP</span>}
+                        </div>
+                        {/* Row 3: subject + snippet */}
                         <p className="text-sm text-slate-300 font-medium truncate">{email.subject}</p>
                         <p className="text-xs text-slate-500 truncate mt-0.5">{email.snippet || email.body?.substring(0, 100)}</p>
                       </div>
@@ -379,16 +517,16 @@ const Dashboard = () => {
 
             {/* Email detail / reply panel */}
             {selectedEmail && (
-              <div className="glass-card p-6 slide-up space-y-4 mt-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-slate-100">{selectedEmail.subject}</h3>
-                    <p className="text-sm text-slate-400 mt-0.5">From: {selectedEmail.senderName} &lt;{selectedEmail.senderEmail}&gt;</p>
+              <div className="glass-card p-4 sm:p-6 slide-up space-y-4 mt-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-slate-100 text-sm sm:text-base">{selectedEmail.subject}</h3>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-0.5 truncate">From: {selectedEmail.senderName} &lt;{selectedEmail.senderEmail}&gt;</p>
                   </div>
-                  <div className="flex gap-2 flex-wrap justify-end">
+                  <div className="flex gap-1.5 sm:gap-2 flex-wrap">
                     <button onClick={() => doAction(selectedEmail.emailId,'mark_read')}              className="btn-ghost py-1 text-xs"><CheckCircle size={12}/> Read</button>
                     <button onClick={() => doAction(selectedEmail.emailId,'ignore')}                 className="btn-ghost py-1 text-xs"><EyeOff size={12}/> Ignore</button>
-                    <button onClick={() => doAction(selectedEmail.emailId,'always_ignore_sender')}   className="btn-danger py-1 text-xs"><AlertCircle size={12}/> Always Ignore</button>
+                    <button onClick={() => doAction(selectedEmail.emailId,'always_ignore_sender')}   className="btn-danger py-1 text-xs"><AlertCircle size={12}/> <span className="hidden sm:inline">Always </span>Ignore</button>
                     <button onClick={() => doAction(selectedEmail.emailId,'move_to_needs_decision')} className="btn-ghost py-1 text-xs text-rose-400">→ Decision</button>
                     <button onClick={() => doAction(selectedEmail.emailId,'move_to_needs_attention')} className="btn-ghost py-1 text-xs text-amber-400">→ Attention</button>
                   </div>
@@ -426,17 +564,17 @@ const Dashboard = () => {
           </div>
         ) : (
           /* ── Summary view ─────────────────────────────────────────────── */
-          <div className="flex gap-6 slide-up">
+          <div className="flex flex-col lg:flex-row gap-6 slide-up">
             <div className="flex-1 space-y-6">
               <div className="text-center">
-                <h2 className="text-3xl font-bold text-slate-100">
+                <h2 className="text-2xl sm:text-3xl font-bold text-slate-100">
                   <span className="gradient-text">{summary.needs_decision}</span>
-                  <span className="text-slate-300 ml-2 text-2xl font-normal">email{summary.needs_decision !== 1 ? 's' : ''} need{summary.needs_decision === 1 ? 's' : ''} your decision</span>
+                  <span className="text-slate-300 ml-2 text-xl sm:text-2xl font-normal">email{summary.needs_decision !== 1 ? 's' : ''} need{summary.needs_decision === 1 ? 's' : ''} your decision</span>
                 </h2>
                 <p className="text-slate-500 text-sm mt-1">Tap a card to view emails</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <CategoryCard id="card-decision"  title="Needs Decision"  count={summary.needs_decision}  color="#fb7185" onClick={() => fetchEmails('needs_decision')}  isActive={viewingState==='needs_decision'} />
                 <CategoryCard id="card-attention" title="Needs Attention" count={summary.needs_attention} color="#fcd34d" onClick={() => fetchEmails('needs_attention')} isActive={viewingState==='needs_attention'} />
                 <CategoryCard id="card-ignored"   title="Ignored Safely"  count={summary.ignored_safely}  color="#64748b" onClick={() => fetchEmails('ignored_safely')}  isActive={viewingState==='ignored_safely'} />
@@ -462,7 +600,7 @@ const Dashboard = () => {
               )}
             </div>
 
-            <div className="w-72 shrink-0 hidden lg:block">
+            <div className="w-full lg:w-72 lg:shrink-0">
               <DailySummaryPanel />
             </div>
           </div>

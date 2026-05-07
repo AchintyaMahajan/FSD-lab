@@ -9,12 +9,13 @@
 
 const express       = require('express');
 const authMiddleware = require('../middleware/auth');
+const { requirePro } = require('../middleware/planCheck');
 const { AutoResponseRule } = require('../models');
 
 const router = express.Router();
 
 // ── POST /api/auto-response/rules ─────────────────────────────────────────
-router.post('/rules', authMiddleware, async (req, res) => {
+router.post('/rules', authMiddleware, requirePro, async (req, res) => {
   const { instruction } = req.body;
   if (!instruction?.trim()) return res.status(400).json({ error: 'instruction is required' });
 

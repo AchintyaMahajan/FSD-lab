@@ -9,12 +9,16 @@
 const express    = require('express');
 const crypto     = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
+const bcrypt     = require('bcryptjs');
+const nodemailer = require('nodemailer');
 
-const { User, Session } = require('../models');
+const { User, Session, OTP } = require('../models');
 const authMiddleware    = require('../middleware/auth');
 
 const router   = express.Router();
 const gClient  = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Transporter will be created dynamically inside the route so it picks up the latest .env without a restart!
 
 // ── Cookie helper ─────────────────────────────────────────────────────────
 const SESSION_COOKIE_OPTIONS = {
@@ -107,6 +111,7 @@ router.post('/google', async (req, res) => {
         email:   user.email,
         name:    user.name,
         picture: user.picture,
+        plan:    user.plan,
       },
       sessionToken,
     });
@@ -116,11 +121,162 @@ router.post('/google', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/register ───────────────────────────────────────────────
+router.post('/register', async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, password, and name are required' });
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    await User.create({
+      email: email.toLowerCase(),
+      name,
+      password: hashedPassword,
+    });
+
+    return res.json({ message: 'Registration successful. You can now log in.' });
+  } catch (err) {
+    console.error('[auth/register]', err.message);
+    return res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// ── POST /api/auth/login ──────────────────────────────────────────────────
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user || !user.password) {
+      return res.status(400).json({ error: 'Invalid email or password' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid email or password' });
+    }
+
+    // Generate 6-digit OTP
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const salt = await bcrypt.genSalt(10);
+    const hashedCode = await bcrypt.hash(code, salt);
+
+    // Remove any existing OTP for this email
+    await OTP.deleteOne({ email: email.toLowerCase() });
+
+    await OTP.create({
+      email: email.toLowerCase(),
+      code: hashedCode,
+    });
+
+    // Send email
+    if (process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD) {
+      try {
+        const dynamicTransporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: process.env.SMTP_EMAIL,
+            pass: process.env.SMTP_PASSWORD,
+          },
+        });
+
+        await dynamicTransporter.sendMail({
+          from: `"MasterMail" <${process.env.SMTP_EMAIL}>`,
+          to: user.email,
+          subject: 'Your MasterMail Login Code',
+          text: `Your login code is: ${code}\nIt will expire in 10 minutes.`,
+        });
+      } catch (smtpErr) {
+        console.error('[SMTP Error] Failed to send email:', smtpErr.message);
+        console.warn(`[FALLBACK] The OTP for ${user.email} is: ${code}`);
+      }
+    } else {
+      console.warn(`[WARNING] SMTP not configured! The OTP for ${user.email} is: ${code}`);
+    }
+
+    return res.json({ message: 'OTP sent to your email' });
+  } catch (err) {
+    console.error('[auth/login]', err.message);
+    return res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// ── POST /api/auth/verify-otp ─────────────────────────────────────────────
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and code are required' });
+    }
+
+    const otpRecord = await OTP.findOne({ email: email.toLowerCase() });
+    if (!otpRecord) {
+      return res.status(400).json({ error: 'OTP expired or invalid' });
+    }
+
+    const isMatch = await bcrypt.compare(code, otpRecord.code);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(400).json({ error: 'User not found' });
+    }
+
+    // Clean up OTP
+    await OTP.deleteOne({ email: email.toLowerCase() });
+
+    // Issue Session
+    user.lastLogin = new Date();
+    await user.save();
+
+    const sessionToken = `sess_${crypto.randomBytes(16).toString('hex')}`;
+    const expiresAt    = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await Session.create({
+      sessionToken,
+      userId:           user.userId,
+      gmailAccessToken: null, // They must connect Gmail later
+      expiresAt,
+    });
+
+    res.cookie('session_token', sessionToken, SESSION_COOKIE_OPTIONS);
+
+    return res.status(200).json({
+      success: true,
+      user: {
+        userId:  user.userId,
+        email:   user.email,
+        name:    user.name,
+        picture: user.picture,
+        plan:    user.plan,
+      },
+      sessionToken,
+    });
+  } catch (err) {
+    console.error('[auth/verify-otp]', err.message);
+    return res.status(500).json({ error: 'OTP verification failed' });
+  }
+});
+
 
 // ── GET /api/auth/me ──────────────────────────────────────────────────────
 router.get('/me', authMiddleware, (req, res) => {
-  const { userId, email, name, picture } = req.user;
-  return res.json({ userId, email, name, picture });
+  const { userId, email, name, picture, plan } = req.user;
+  return res.json({ userId, email, name, picture, plan });
 });
 
 // ── POST /api/auth/logout ─────────────────────────────────────────────────

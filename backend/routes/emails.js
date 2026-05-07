@@ -37,7 +37,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
   const [nd, na, is_] = await Promise.all([
     Email.countDocuments({ ...base, actionState: 'needs_decision' }),
     Email.countDocuments({ ...base, actionState: 'needs_attention' }),
-    Email.countDocuments({ userId, actionState: 'ignored_safely' }),
+    Email.countDocuments({ userId, actionState: 'ignored_safely', isRead: false }),
   ]);
 
   return res.json({ needs_decision: nd, needs_attention: na, ignored_safely: is_, total: nd + na + is_ });
@@ -173,7 +173,7 @@ router.get('/', authMiddleware, async (req, res) => {
   const { userId } = req.user;
   const { action_state, custom_bucket_id } = req.query;
 
-  const query = { userId };
+  const query = { userId, isRead: false };
   if (custom_bucket_id)  query.customBucketId = custom_bucket_id;
   else if (action_state) query.actionState    = action_state;
 
